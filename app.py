@@ -6,7 +6,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from src.pipeline import run_pipeline
-from src.spotify_client import is_spotify_configured
+from src.soundcloud_client import is_soundcloud_configured
 
 
 st.set_page_config(
@@ -162,6 +162,9 @@ def _inject_styles() -> None:
             border-radius: 20px;
             padding: 0.65rem 0.65rem 0.65rem 1.05rem;
             box-shadow: 0 12px 32px rgba(20, 33, 61, 0.05);
+            min-height: 445px;
+            display: flex;
+            flex-direction: column;
             transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
         }
 
@@ -174,7 +177,7 @@ def _inject_styles() -> None:
         .side-copy {
             color: #4a5b72;
             line-height: 1.8;
-            margin-bottom: 1.2rem;
+            margin-bottom: 0.4rem;
             text-align: justify;
             text-justify: inter-word;
             font-size: 0.95rem;
@@ -249,12 +252,15 @@ def _inject_styles() -> None:
         }
 
         .track-card {
+            display: flex;
+            flex-direction: column;
             background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(250,250,248,0.96));
             border: 1px solid rgba(20, 33, 61, 0.08);
             border-radius: 20px;
             padding: 1.15rem;
             box-shadow: 0 12px 24px rgba(20, 33, 61, 0.05);
-            height: 100%;
+            height: 335px;
+            overflow: hidden;
             transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
         }
 
@@ -335,12 +341,22 @@ def _inject_styles() -> None:
             font-weight: 700;
             color: #1d3557;
             margin-bottom: 0.2rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.3;
+            min-height: 2.8rem;
         }
 
         .track-meta {
             color: #6b7280;
             font-size: 0.92rem;
             margin-bottom: 0.7rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .chip {
@@ -361,6 +377,12 @@ def _inject_styles() -> None:
             font-size: 0.92rem;
             margin-top: 0.8rem;
             text-align: justify;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-grow: 1;
         }
 
         div[data-testid="stForm"] {
@@ -369,6 +391,10 @@ def _inject_styles() -> None:
             border-radius: 24px;
             padding: 1rem 1rem 0.9rem 1rem;
             box-shadow: 0 14px 34px rgba(20, 33, 61, 0.05);
+            min-height: 445px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
             transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
         }
 
@@ -521,13 +547,15 @@ def _init_state() -> None:
     st.session_state.setdefault("time_of_day", "evening")
     st.session_state.setdefault("activity", "relaxing")
     st.session_state.setdefault("weather", "cloudy")
-    st.session_state.setdefault("use_spotify", False)
+    st.session_state.setdefault("use_soundcloud", False)
     st.session_state.setdefault("result", None)
     st.session_state.setdefault("auto_generate", False)
+    st.session_state.setdefault("visible_tracks", 6)
+    st.session_state.setdefault("languages", [])
 
 
 def _render_header() -> None:
-    spotify_ready = "Spotify ready" if is_spotify_configured() else "Local mode"
+    soundcloud_ready = "SoundCloud ready" if is_soundcloud_configured() else "Local mode"
     model_mode = "Fast local inference"
     st.markdown(
         f"""
@@ -538,7 +566,7 @@ def _render_header() -> None:
                 The app fuses NLP-based emotion detection with time, activity, and weather signals to produce
                 explainable recommendations that feel usable in the moment.
             </p>
-            <span class="status-pill">{spotify_ready}</span>
+            <span class="status-pill">{soundcloud_ready}</span>
             <span class="status-pill alt">{model_mode}</span>
         </div>
         """,
@@ -585,6 +613,15 @@ def _render_controls() -> None:
             height=150,
         )
 
+        st.multiselect(
+            "Preferred Languages (Optional)",
+            options=["English", "Spanish", "French", "Korean", "Hindi", "Japanese", "Telugu", "Tamil", "German"],
+            key="languages",
+            help="Filter recommendations by language (including dubbed versions when available)."
+        )
+
+        st.markdown("<div style='margin-bottom: 0.00rem;'></div>", unsafe_allow_html=True)
+
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1.15])
         with col1:
             st.selectbox(
@@ -606,9 +643,9 @@ def _render_controls() -> None:
             )
         with col4:
             st.checkbox(
-                "Use Spotify if available",
-                key="use_spotify",
-                help="Falls back to the local catalog if Spotify credentials are not configured.",
+                "Use SoundCloud if available",
+                key="use_soundcloud",
+                help="Falls back to the local catalog if SoundCloud credentials are not configured.",
             )
 
         submitted = st.form_submit_button("Generate Recommendations", use_container_width=True)
@@ -627,9 +664,11 @@ def _render_controls() -> None:
                     time_of_day=st.session_state["time_of_day"],
                     activity=st.session_state["activity"],
                     weather=st.session_state["weather"],
-                    use_spotify=st.session_state["use_spotify"],
+                    languages=st.session_state.get("languages", []),
+                    use_soundcloud=st.session_state["use_soundcloud"],
                 )
                 st.session_state["just_submitted"] = True
+                st.session_state["visible_tracks"] = 6
 
 
 def _render_live_panel() -> None:
@@ -640,10 +679,13 @@ def _render_live_panel() -> None:
     st.markdown(
         """
         <div class="sidebar-card right-panel-wrap">
+            <p class="side-copy">
+                Watch how our NLP recommendation engine interprets your mood and applies contextual constraints in real-time below:
+            </p>
             <div class="bullet-note"><strong>1.</strong> Detect emotion from free-form text.</div>
             <div class="bullet-note"><strong>2.</strong> Adjust the mood profile using time, activity, and weather.</div>
             <div class="bullet-note"><strong>3.</strong> Rank the strongest matching tracks and explain each choice.</div>
-            <div class="bullet-note"><strong>4.</strong> Optionally switch to Spotify when credentials are configured.</div>
+            <div class="bullet-note"><strong>4.</strong> Optionally switch to SoundCloud when credentials are configured.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -676,18 +718,22 @@ def _render_metrics(result: Dict[str, object]) -> None:
 def _render_tracks(result: Dict[str, object]) -> None:
     st.markdown('<div class="title-wrap"><div class="section-title">Your live recommendations</div></div>', unsafe_allow_html=True)
     recommendations = result["recommendations"]
+    
+    visible_count = st.session_state.get("visible_tracks", 6)
+    tracks_to_show = recommendations[:visible_count]
+    
     columns = st.columns(2)
 
-    for idx, track in enumerate(recommendations):
+    for idx, track in enumerate(tracks_to_show):
         with columns[idx % 2]:
             chips = (
                 f'<span class="chip">{str(track["genre"]).title()}</span>'
-                f'<span class="chip">Score {track["score"]:.2f}</span>'
-                f'<span class="chip">Tempo {int(track["tempo"])}</span>'
+                f'<span class="chip">Score {track.get("score", 0):.2f}</span>'
+                f'<span class="chip">Tempo {int(track.get("tempo", 0))}</span>'
             )
-            spotify_link = ""
+            soundcloud_link = ""
             if track.get("url"):
-                spotify_link = f'<p><a href="{track["url"]}" target="_blank">Open in Spotify</a></p>'
+                soundcloud_link = f'<p><a href="{track["url"]}" target="_blank">Open in SoundCloud</a></p>'
 
             st.markdown(
                 f"""
@@ -697,11 +743,18 @@ def _render_tracks(result: Dict[str, object]) -> None:
                     <div class="track-meta">by {track['artist']}</div>
                     <div>{chips}</div>
                     <div class="reason">{track['reason']}</div>
-                    {spotify_link}
+                    {soundcloud_link}
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
+            
+    if visible_count < len(recommendations):
+        def _load_more():
+            st.session_state["visible_tracks"] += 6
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.button("Load More Tracks", on_click=_load_more, use_container_width=True)
 
 
 def main() -> None:
@@ -734,20 +787,36 @@ def main() -> None:
         if st.session_state.get("just_submitted"):
             st.session_state["just_submitted"] = False
             import time
-            components.html(
-                f"""
-                <script>
-                    // Execution ID: {time.time()}
-                    setTimeout(() => {{
-                        const target = window.parent.document.getElementById("recommendations-section");
-                        if (target) {{
-                            target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
-                        }}
-                    }}, 100);
-                </script>
-                """,
-                height=0,
-            )
+            # st.components.v1.html deprecated, using st.html for script execution if available
+            try:
+                st.html(
+                    f"""
+                    <script>
+                        // Execution ID: {time.time()}
+                        setTimeout(() => {{
+                            const target = window.parent.document.getElementById("recommendations-section");
+                            if (target) {{
+                                target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+                            }}
+                        }}, 100);
+                    </script>
+                    """
+                )
+            except AttributeError:
+                components.html(
+                    f"""
+                    <script>
+                        // Execution ID: {time.time()}
+                        setTimeout(() => {{
+                            const target = window.parent.document.getElementById("recommendations-section");
+                            if (target) {{
+                                target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+                            }}
+                        }}, 100);
+                    </script>
+                    """,
+                    height=0,
+                )
     else:
         st.info("Submit a mood and context combination to see real-time emotion detection and recommendations.")
 

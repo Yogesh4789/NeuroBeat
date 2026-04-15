@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from models.emotion_model import detect_emotion
 from src.context_fusion import build_target_profile
 from src.recommender import load_song_data, recommend_tracks
-from src.spotify_client import fetch_spotify_recommendations
+from src.soundcloud_client import fetch_soundcloud_recommendations
 
 
 SONG_DATA_PATH = "data/songs.csv"
@@ -16,7 +16,8 @@ def run_pipeline(
     time_of_day: Optional[str] = None,
     activity: Optional[str] = None,
     weather: Optional[str] = None,
-    use_spotify: bool = False,
+    languages: Optional[List[str]] = None,
+    use_soundcloud: bool = False,
 ) -> Dict[str, object]:
     emotion, confidence, top_emotions, model_used = detect_emotion(text)
     target_profile = build_target_profile(
@@ -35,13 +36,14 @@ def run_pipeline(
     recommendations = []
     recommendation_source = "local"
 
-    if use_spotify:
-        recommendations = fetch_spotify_recommendations(
+    if use_soundcloud:
+        recommendations = fetch_soundcloud_recommendations(
             target_profile=target_profile,
-            limit=5,
+            languages=languages,
+            limit=20,
         )
         if recommendations:
-            recommendation_source = "spotify"
+            recommendation_source = "soundcloud"
 
     if not recommendations:
         recommendations = recommend_tracks(
@@ -49,6 +51,8 @@ def run_pipeline(
             emotion=emotion,
             target_profile=target_profile,
             context=context,
+            languages=languages,
+            top_k=20,
         )
 
     return {

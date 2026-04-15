@@ -110,9 +110,15 @@ def recommend_tracks(
     emotion: str,
     target_profile: Dict[str, object],
     context: Dict[str, str],
+    languages: List[str] = None,
     top_k: int = 5,
 ) -> List[Dict[str, object]]:
     ranked = songs_df.copy()
+    
+    if languages and "language" in ranked.columns:
+        filtered = ranked[ranked["language"].str.lower().isin([l.lower() for l in languages])]
+        if not filtered.empty:
+            ranked = filtered
     ranked["score"] = ranked.apply(
         lambda row: score_song(row, target_profile=target_profile, context=context),
         axis=1,
