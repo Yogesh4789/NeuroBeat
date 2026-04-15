@@ -787,36 +787,20 @@ def main() -> None:
         if st.session_state.get("just_submitted"):
             st.session_state["just_submitted"] = False
             import time
-            # st.components.v1.html deprecated, using st.html for script execution if available
-            try:
-                st.html(
-                    f"""
-                    <script>
-                        // Execution ID: {time.time()}
-                        setTimeout(() => {{
-                            const target = window.parent.document.getElementById("recommendations-section");
-                            if (target) {{
-                                target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
-                            }}
-                        }}, 100);
-                    </script>
-                    """
-                )
-            except AttributeError:
-                components.html(
-                    f"""
-                    <script>
-                        // Execution ID: {time.time()}
-                        setTimeout(() => {{
-                            const target = window.parent.document.getElementById("recommendations-section");
-                            if (target) {{
-                                target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
-                            }}
-                        }}, 100);
-                    </script>
-                    """,
-                    height=0,
-                )
+            components.html(
+                f"""
+                <script>
+                    // Execution ID: {time.time()}
+                    setTimeout(() => {{
+                        const target = window.parent.document.getElementById("recommendations-section");
+                        if (target) {{
+                            target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+                        }}
+                    }}, 100);
+                </script>
+                """,
+                height=0,
+            )
     else:
         st.info("Submit a mood and context combination to see real-time emotion detection and recommendations.")
 
